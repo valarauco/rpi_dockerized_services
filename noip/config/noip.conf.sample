@@ -1,0 +1,10 @@
+# This is an email address
+USERNAME='youremail@your.domain'
+
+PASSWORD='password'
+
+# Your hostname, group name, or a comma-delimited list of a mix of them.
+DOMAINS='my.domain'
+
+# Examples: 5 m, 5 h, 5 d. Minimum is 5 minutes.
+INTERVAL='10m'

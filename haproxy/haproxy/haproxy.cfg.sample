@@ -1,0 +1,106 @@
+global
+	log 127.0.0.1	local0
+	log 127.0.0.1	local1 notice
+#	log /dev/log	local0
+#	log /dev/log	local1 notice
+
+#	chroot /var/lib/haproxy
+#	stats socket /run/haproxy/admin.sock mode 660 level admin
+#	stats timeout 30s
+#	user haproxy
+#	group haproxy
+#	daemon
+
+	# Default SSL material locations
+	ca-base /usr/local/etc/ssl/certs
+	crt-base /usr/local/etc/ssl/private
+
+	# Default ciphers to use on SSL-enabled listening sockets.
+	# For more information, see ciphers(1SSL). This list is from:
+	#  https://hynek.me/articles/hardening-your-web-servers-ssl-ciphers/
+	# An alternative list with additional directives can be obtained from
+	#  https://mozilla.github.io/server-side-tls/ssl-config-generator/?server=haproxy
+	ssl-default-bind-ciphers ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS
+	ssl-default-bind-options no-sslv3
+
+defaults
+	log	global
+	mode	http
+	option	httplog
+	option	dontlognull
+        timeout connect 5000
+        timeout client  50000
+        timeout server  50000
+	errorfile 400 /usr/local/etc/haproxy/errors/400.http
+	errorfile 403 /usr/local/etc/haproxy/errors/403.http
+	errorfile 408 /usr/local/etc/haproxy/errors/408.http
+	errorfile 500 /usr/local/etc/haproxy/errors/500.http
+	errorfile 502 /usr/local/etc/haproxy/errors/502.http
+	errorfile 503 /usr/local/etc/haproxy/errors/503.http
+	errorfile 504 /usr/local/etc/haproxy/errors/504.http
+
+# HTTP/S General Frontend
+frontend http_frontend
+  mode			http
+  option		httplog
+  bind			:80
+  bind			:443 ssl crt /usr/local/etc/haproxy/cert/cert.pem
+
+  acl			well_known_uri	path_beg /.well-known
+  acl			home_domain hdr(host) -i my.domain
+  acl			pihole_admin path_beg /admin
+  acl			nc_uri path_beg /nextcloud/
+  acl			internal_ip src 192.168.1.0/24
+
+  ## Protect httpoxy: https://httpoxy.org/
+  http-request		del-header Proxy
+
+  http-request 		deny if pihole_admin !internal_ip
+  http-request 		deny if !home_domain !internal_ip
+
+  #use_backend		redirect_backend if !{ ssl_fc }
+  #use_backend 		nginx_backend if well_known_uri
+  use_backend           nchttps_backend if { ssl_fc } nc_uri
+  use_backend           nchttp_backend if !{ ssl_fc } nc_uri
+  default_backend	pihole_backend
+
+# HTTPS Default Backend
+backend	pihole_backend
+  mode			http
+  option		httplog
+  server		pihole 192.168.1.250:8181 check
+
+# HTTP nextcloud Default Backend
+backend	nchttp_backend
+  mode			http
+  option		httplog
+  reqirep ^([^\ :]*)\ /nextcloud/(.*) \1\ /\2
+  server		nc_http 192.168.1.250:8282 check
+
+# HTTPS nextcloud Default Backend
+backend	nchttps_backend
+  mode			http
+  option		httplog
+#  option 		ssl-hello-chk
+  reqirep ^([^\ :]*)\ /nextcloud/(.*) \1\ /\2
+  server		nc_https 192.168.1.250:8383 check ssl verify none
+
+listen stats 0.0.0.0:9000       #Listen on all IP's on port 9000
+    mode http
+    balance
+    timeout client 5000
+    timeout connect 4000
+    timeout server 30000
+
+    #This is the virtual URL to access the stats page
+    stats uri /
+
+    #Authentication realm. This can be set to anything. Escape space characters with a backslash.
+    stats realm HAProxy\ Statistics 
+
+    #The user/pass you want to use. Change this password!
+    stats auth admin:pass   
+
+    #This allows you to take down and bring up back end servers.
+    #This will produce an error on older versions of HAProxy.
+    #stats admin if TRUE
