@@ -14,7 +14,7 @@ docker run -d \
     --restart=always \
     diginc/pi-hole:arm
 
-docker exec pihole sudo pihole -a -p libreelec
+docker exec pihole sudo pihole -a -p password
 docker exec pihole pihole -up
 
 exit 0
