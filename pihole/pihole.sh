@@ -7,15 +7,17 @@ DOCKER_CONFIGS="$(pwd)"  # Default of directory you run this from, update to whe
 
 docker run -d \
     --name pihole \
-    -p 53:53/tcp -p 53:53/udp -p 8181:80 \
     -v "${DOCKER_CONFIGS}/pihole/:/etc/pihole/" \
     -v "${DOCKER_CONFIGS}/dnsmasq.d/:/etc/dnsmasq.d/" \
+    -e WEB_PORT="8181" \
+    -e DNSMASQ_LISTENING=all \
     -e ServerIP="${IP}" \
     --restart=always \
-    diginc/pi-hole:arm
+    --net host \
+    --cap-add=NET_ADMIN \
+    diginc/pi-hole-multiarch:debian_armhf
 
-docker exec pihole sudo pihole -a -p password
-docker exec pihole pihole -up
+#docker exec -it pihole pihole -up
 
 exit 0
 
